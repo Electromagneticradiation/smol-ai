@@ -1,68 +1,51 @@
-# takes relevant info and returns suitable model(s)
+# takes relevant info about data & returns verdict for models
 
 '''
-    task = reg | class
+input :
+    task = regression | classification
     ftype = {}
-    noise =
-    style =
+    outlier = 
+    extrapol =
 '''
-             
-    # make a class or structure of models strings : name score, lists : why whynot
-    # make 6 objects
-              
+
     # if n_rown >= upper_threshold boost score++++ why = best for larger databases, elif <= lower_threshold linear, rf score++++ why = good for small datasets, else rf+ (extra + if <medium_threshold) cat++ xg++ lgbm+ (extra + if >medium_threshold)
-
     # feats : more = rf alright, linear regularize=stabliize but multicollinearity, boost okok 
-
     # category ( if exceeds encoding feasibility) = catboost++
-
-    # if out > threshold RF score++ why = immune to outliers, LR and Boost score-- whynot = outliers affect model,  ridge score---- whynot = overfit to extreme outliers  
-
+    # if outlier > threshold RF score++ why = immune to outliers, LR and Boost score-- whynot = outliers affect model,  ridge score---- whynot = overfit to extreme outliers  
     # if extrapol == True ridge score = MAX_INT why = capable of extrapolation unlike the other models in the platter
-
-    # if task = regression delete log_reg, elif classification delete ridge
-
-# if (__name__=="__main__") :
-
-# tabnet | decision tree | svm | knn | naive bayes rejected bcz : 
 
 from dataclasses import dataclass, field
 
 @dataclass
-class ModelCandidate:
+class Model:
     name: str
     score: int = 0
     why: list[str] = field(default_factory=list)
     why_not: list[str] = field(default_factory=list)
 
-def model_picker(task: str, n_rows: int, n_feat: int, ftype: dict, out: float, extrapol: bool) -> list[ModelCandidate]:
+def model_picker(task: str, n_rows: int, n_feat: int, ftype: dict, outlier: float, extrapol: bool) -> list[Model]:
     
     # CONFIGS
-    UPPER = 100_000
-    MEDIUM = 10_000
-    LOWER = 1_000
+    R_UPPER = 100_000
+    R_MEDIUM = 10_000
+    R_LOWER = 1_000
     OUT_THRESHOLD = 0.05  # tweak this
     ENCODING_LIMIT = 10   # max categories before CatBoost preferred
 
+    # dict{name:object} > list[object] for access & understandability of unordered items
     models = {
-        "logistic_regression": ModelCandidate("logistic_regression"),
-        "ridge":               ModelCandidate("ridge"),
-        "random_forest":       ModelCandidate("random_forest"),
-        "catboost":            ModelCandidate("catboost"),
-        "xgboost":             ModelCandidate("xgboost"),
-        "lightgbm":            ModelCandidate("lightgbm"),
+        "logistic_regression": Model("logistic_regression"),
+        "ridge":               Model("ridge"),
+        "random_forest":       Model("random_forest"),
+        "catboost":            Model("catboost"),
+        "xgboost":             Model("xgboost"),
+        "lightgbm":            Model("lightgbm"),
     }
 
-    m = models  # shorthand
+    m = models #alias
 
-    # --- task filter ---
-    if task == "regression":
-        del m["logistic_regression"]
-    elif task == "class":
-        del m["ridge"]
-
-    # --- row count ---
-    if n_rows >= UPPER:
+    # n_rows
+    if n_rows >= R_UPPER:
         m["lightgbm"].score += 4
         m["lightgbm"].why.append("best for large datasets")
         m["catboost"].score += 3
@@ -70,7 +53,7 @@ def model_picker(task: str, n_rows: int, n_feat: int, ftype: dict, out: float, e
         m["xgboost"].score += 3
         m["xgboost"].why.append("scales well to large data")
 
-    elif n_rows <= LOWER:
+    elif n_rows <= R_LOWER:
         if "logistic_regression" in m:
             m["logistic_regression"].score += 4
             m["logistic_regression"].why.append("reliable on small datasets")
@@ -86,7 +69,7 @@ def model_picker(task: str, n_rows: int, n_feat: int, ftype: dict, out: float, e
         m["catboost"].score += 2
         m["xgboost"].score += 2
         m["lightgbm"].score += 2
-        if n_rows < MEDIUM:
+        if n_rows < R_MEDIUM:
             m["random_forest"].score += 1
             m["random_forest"].why.append("preferred under medium threshold")
         else:
@@ -110,7 +93,7 @@ def model_picker(task: str, n_rows: int, n_feat: int, ftype: dict, out: float, e
         m["catboost"].why.append("native handling of high cardinality categoricals")
 
     # --- outliers ---
-    if out > OUT_THRESHOLD:
+    if outlier > OUT_THRESHOLD:
         m["random_forest"].score += 2
         m["random_forest"].why.append("immune to outliers")
         for name in ["xgboost", "lightgbm", "catboost"]:
@@ -134,6 +117,12 @@ def model_picker(task: str, n_rows: int, n_feat: int, ftype: dict, out: float, e
                 m[name].why_not.append("tree-based models cannot extrapolate beyond training range")
                 m[name].score -= 3
 
-    # --- sort and return ---
+    # task : last to avoid deletion before scoring (error handling overhead)
+    if task == "regression":
+        del m["logistic_regression"]
+    elif task == "classification":
+        del m["ridge"]
+
+    # sort and return
     result = sorted(m.values(), key=lambda x: x.score, reverse=True)
     return result
