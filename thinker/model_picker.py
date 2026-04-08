@@ -1,12 +1,13 @@
 # takes relevant info about data & returns verdict for models
 
 '''
-input :
-    task = regression | classification
-    ftype = {"n_num": int, "n_cat": int, "sparsity": list[float]}
-            sparsity = ratio of rarest class in each categorical feature (0-1)
-    missing = ratio of missing values in data (0-1)
-    outlier = ratio of outliers in data (0-1)
+INPUTS
+task = regression | classification
+int n_rows n_feat
+ftype = {"n_num": int, "n_cat": int, "sparsity": list[float]} sparsity = ratio of rarest class in each categorical feature (0-1)
+missing = ratio of missing values in data (0-1)
+outlier = ratio of outliers in data (0-1)
+bool extrapol
 '''
 
 from dataclasses import dataclass, field
@@ -160,3 +161,26 @@ def model_picker(task: str, n_rows: int, n_feat: int, ftype: dict, missing: floa
     # sort and return
     result = sorted(m.values(), key=lambda x: x.score, reverse=True)
     return result
+
+# test
+if __name__ == "__main__":
+    ftype = {
+        "n_num": 5,
+        "n_cat": 3,
+        "sparsity": [0.2, 0.05, 0.01]
+    }
+
+    models = model_picker(
+        task="classification",
+        n_rows=5000,
+        n_feat=20,
+        ftype=ftype,
+        missing=0.15,
+        outlier=0.02,
+        extrapol=False
+    )
+
+    for m in models:
+        print(f"{m.name}: {m.score}")
+        print("  why:", m.why)
+        print("  why_not:", m.why_not)
